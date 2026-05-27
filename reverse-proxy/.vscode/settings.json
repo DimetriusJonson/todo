@@ -1,6 +1,0 @@
-{
-    "lldb.evaluationTimeout": 15,
-    "lldb.launch.env": {
-        "LLDB_USE_NATIVE_PDB_READER": "1"
-    }
-}
