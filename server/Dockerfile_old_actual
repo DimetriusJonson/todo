@@ -1,0 +1,29 @@
+FROM rust:latest AS build
+WORKDIR /build
+
+RUN rustup target add x86_64-unknown-linux-musl
+
+RUN apt update
+RUN apt install -yq musl-tools
+
+RUN --mount=type=bind,source=src,target=src \
+    --mount=type=bind,source=.cargo,target=.cargo \
+    --mount=type=bind,source=Cargo.toml,target=Cargo.toml \
+    --mount=type=bind,source=Cargo.lock,target=Cargo.lock \
+    --mount=type=cache,target=/app/target/ \
+    --mount=type=cache,target=/usr/local/cargo/git/db \
+    --mount=type=cache,target=/usr/local/cargo/registry/ \
+cargo build --target x86_64-unknown-linux-musl --locked --release
+
+FROM scratch AS final
+
+COPY --from=build /build/target/x86_64-unknown-linux-musl/release/axum-prj server
+
+# Configure rocket to listen on all interfaces.
+ENV ROCKET_ADDRESS=0.0.0.0
+
+# Expose the port that the application listens on.
+EXPOSE 8000
+
+# What the container should run when it is started.
+CMD ["./server"]

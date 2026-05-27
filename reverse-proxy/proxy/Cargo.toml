@@ -1,0 +1,15 @@
+[package]
+name = "proxy"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+async-trait="0.1.89"
+pingora = { version = "0.8.0", default-features = false, features = ["proxy", "rustls"] }
+http = "1.4.0"
+dotenvy = "0.15.7"
+anyhow = "1.0.102"
+pretty_env_logger = "0.5.0"
+log = "0.4.29"
+resource-proxy-pingora = {path = "../resource-proxy-pingora"}
+

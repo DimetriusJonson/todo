@@ -1,0 +1,27 @@
+services:
+  app:
+    image: todo-server:latest
+    volumes:
+      - ./data:/data
+#    ports:
+#      - "3000:8000"
+    env_file:
+      - .env.prod
+    networks:
+      - app-network
+
+  reverse-proxy:
+    image: todo-proxy:latest
+    ports:
+      - 80:80
+      - 443:443
+    env_file:
+      - .env.prod
+    depends_on:
+      - app
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge

@@ -1,0 +1,51 @@
+FROM rust:1.94.0-alpine3.23 AS builder
+
+# Install musl build tools
+RUN apk add --no-cache musl-dev openssl-dev openssl-libs-static
+
+WORKDIR /app
+
+# Copy manifests
+COPY Cargo.toml Cargo.lock ./
+COPY .cargo ./.cargo
+
+# Create dummy src for caching
+RUN mkdir src && \
+    echo "fn main() {}" > src/main.rs
+
+# Build dependencies only (cached if Cargo.toml unchanged)
+RUN cargo build --release --target x86_64-unknown-linux-musl && \
+    rm -rf src
+
+# Copy actual source
+COPY src ./src
+
+# Build the application
+RUN touch src/main.rs && \
+    cargo build --release --target x86_64-unknown-linux-musl
+
+
+# Additional compression with UPX
+FROM alpine:3.19 AS compressor
+RUN apk add --no-cache upx
+COPY --from=builder /app/target/x86_64-unknown-linux-musl/release/axum-prj /server
+RUN upx --best --lzma /server
+
+# Runtime stage - completely empty base
+#FROM scratch
+FROM gcr.io/distroless/static:nonroot
+
+# Copy the static binary
+#COPY --from=builder /app/target/x86_64-unknown-linux-musl/release/axum-prj /server
+COPY --from=compressor /server /server
+
+# Configure rocket to listen on all interfaces.
+ENV ROCKET_ADDRESS=0.0.0.0
+
+# Expose port
+EXPOSE 8000
+
+USER nonroot
+
+# Run the binary
+ENTRYPOINT ["/server"]

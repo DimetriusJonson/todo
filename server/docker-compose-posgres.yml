@@ -1,0 +1,48 @@
+version: "3.9"
+services:
+  app:
+    image: axum-prj-alpine:latest
+#    ports:
+#      - "3000:8000"
+    env_file:
+      - .env.prod
+    depends_on:
+      - db
+    networks:
+      - app-network
+
+  reverse-proxy:
+    image: reverse-proxy:latest
+    ports:
+      - 8080:8080
+      - 8443:8443
+    env_file:
+      - .env.prod
+    depends_on:
+      - app
+    networks:
+      - app-network
+
+  db:
+    image: postgres:16.13-alpine3.23
+    volumes:
+      - db-data:/var/lib/postgresql
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    env_file:
+      - .env.prod
+    ports:
+      - 5433:5432
+    networks:
+      - app-network  
+    healthcheck:
+      test: psql -U postgres -q -d postgres -c "SELECT 'ready';"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+volumes:
+  db-data:
+
+networks:
+  app-network:
+    driver: bridge

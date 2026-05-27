@@ -1,0 +1,58 @@
+# Dockerfile.production
+# Production-ready minimal Rust container
+
+# syntax=docker/dockerfile:1.4
+
+# Build stage
+FROM rust:1.94.0-alpine3.23 AS builder
+
+# Install build dependencies
+RUN apk add --no-cache musl-dev
+
+WORKDIR /app
+
+# Copy only dependency files first
+COPY Cargo.toml Cargo.lock ./
+COPY .cargo ./.cargo
+
+# Create dummy main for dependency caching
+RUN mkdir src && echo "fn main() {}" > src/main.rs
+
+# Build dependencies (this layer is cached)
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/app/target \
+    cargo build --release && \
+    rm -rf src
+
+# Copy source code
+COPY src ./src
+
+# Build the actual application
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/app/target \
+    touch src/main.rs && \
+    cargo build --release && \
+    cp target/release/axum-prj /myapp
+
+# Runtime stage
+FROM gcr.io/distroless/static-debian12:nonroot
+
+# Labels
+#LABEL org.opencontainers.image.source="https://github.com/myorg/myapp"
+#LABEL org.opencontainers.image.description="My Rust Application"
+#LABEL org.opencontainers.image.version="1.0.0"
+
+# Copy binary
+COPY --from=builder /myapp /myapp
+
+# Expose port
+EXPOSE 3000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD ["/myapp", "--health-check"]
+
+# Run as non-root (distroless:nonroot runs as user 65532)
+USER nonroot
+
+ENTRYPOINT ["/myapp"]

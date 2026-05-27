@@ -1,0 +1,15 @@
+[workspace]
+members = ["resource-proxy-pingora", "proxy"]
+resolver = "3"
+
+[profile.release]
+# Optimize for size
+opt-level = "z"      # Optimize for size (or "s" for slightly less aggressive)
+lto = true           # Link-Time Optimization
+codegen-units = 1    # Single codegen unit for better optimization
+#panic = "abort"      # Smaller binary, no unwinding
+strip = true         # Strip symbols
+
+[profile.release.package."*"]
+opt-level = "z"      # Also optimize dependencies for size
+
