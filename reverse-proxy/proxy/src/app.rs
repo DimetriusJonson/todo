@@ -2,11 +2,7 @@ use async_trait::async_trait;
 use http::{Method, Response, StatusCode, header};
 use log::debug;
 use pingora::{
-    Error, ErrorType,
-    apps::http_app::ServeHttp,
-    http::{RequestHeader, ResponseHeader},
-    prelude::{HttpPeer, ProxyHttp, Result, Session},
-    protocols::http::ServerSession,
+    Error, ErrorType, apps::http_app::ServeHttp, http::{RequestHeader, ResponseHeader}, modules::http::{HttpModules, compression::ResponseCompressionBuilder}, prelude::{HttpPeer, ProxyHttp, Result, Session}, protocols::http::ServerSession
 };
 use resource_proxy_pingora::RequestFilter;
 
@@ -51,6 +47,12 @@ impl ProxyApp {
 impl ProxyHttp for ProxyApp {
     type CTX = ();
     fn new_ctx(&self) {}
+
+    fn init_downstream_modules(&self, modules: &mut HttpModules) {
+        // Enable downstream compression with a compression level of 6
+        // (Level 6 is a good balance between CPU usage and compression ratio)
+        modules.add_module(ResponseCompressionBuilder::enable(6));
+    }
 
     async fn proxy_upstream_filter(
         &self,
