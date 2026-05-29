@@ -42,8 +42,8 @@ COPY --from=compressor /app /app
 
 COPY reverse-proxy/keys /root/keys
 COPY client/dist /root/yew/www
-COPY todo-react/build /root/react/www
-COPY todo-svelte/build /root/svelte/www
+#COPY todo-react/build /root/react/www
+#COPY todo-svelte/build /root/svelte/www
 
 #USER nonroot
 

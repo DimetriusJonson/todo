@@ -32,3 +32,11 @@ strip = true         # Strip symbols
 
 [profile.release.package."*"]
 opt-level = "z"      # Also optimize dependencies for size
+
+
+[profile.wasm-release]
+inherits = "release"
+opt-level = 'z'
+lto = true
+codegen-units = 1
+panic = "abort"
