@@ -57,7 +57,7 @@ async fn create_test_data(db: &DatabaseConnection) -> AppResult<()> {
     tasks::ActiveModel {
         priority: Set(None),
         title: Set("my deleted task".to_owned()),
-        deleted_at: Set(Some(Utc::now().fixed_offset())),
+        deleted_at: Set(Some(Utc::now().fixed_offset().to_rfc2822())),
         user_id: Set(Some(db_user.id.unwrap())),
         ..Default::default()
     }

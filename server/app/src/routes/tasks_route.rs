@@ -10,6 +10,7 @@ use sea_orm::ActiveValue::Set;
 use sea_orm::{ActiveModelTrait, ColumnTrait, IntoActiveModel, QueryFilter, TryIntoModel};
 use sea_orm::{DatabaseConnection, EntityTrait};
 use serde::{Deserialize, Serialize};
+use tracing::error;
 use validator::Validate;
 
 #[derive(Serialize)]
@@ -21,14 +22,14 @@ pub async fn tasks(
     State(db_conn): State<DatabaseConnection>,
     Extension(user): Extension<users::Model>,
 ) -> AppResult<Json<TasksResponse>> {
-    let tasks: Vec<TaskDto> = Tasks::find()
+    let tasks = Tasks::find()
         .filter(tasks::Column::UserId.eq(user.id))
         .filter(tasks::Column::DeletedAt.is_null())
         .all(&db_conn)
         .await?
         .into_iter()
         .map(build_task)
-        .collect();
+        .collect::<AppResult<Vec<TaskDto>>>()?;
 
     Ok(Json(TasksResponse { data: tasks }))
 }
@@ -45,7 +46,7 @@ pub async fn task(
         .one(&db_conn)
         .await?
     {
-        Ok(Json(build_task(task)))
+        Ok(Json(build_task(task)?))
     } else {
         Err(AppError::not_found(format!("Not found task id={}", id)))
     }
@@ -62,13 +63,33 @@ pub async fn create_task(
         description: Set(task.description),
         user_id: Set(Some(user.id)),
         is_default: Set(task.is_default),
-        completed_at: Set(task.completed_at),
+        completed_at: Set(date_to_str(task.completed_at)),
         ..Default::default()
     }
     .save(&db_conn)
     .await?;
 
-    Ok(Json(build_task(saved_task.try_into_model()?)))
+    Ok(Json(build_task(saved_task.try_into_model()?)?))
+}
+
+fn date_to_str(date: Option<DateTime<FixedOffset>>) -> Option<String> {
+    match date {
+        Some(date) => Some(date.to_rfc2822()),
+        None => None,
+    }
+}
+
+fn str_to_date(str: Option<String>) -> AppResult<Option<DateTime<FixedOffset>>> {
+    Ok(match str {
+        Some(str) => match DateTime::parse_from_rfc2822(&str) {
+            Ok(str) => Some(str),
+            Err(err) => {
+                error!("ChronoParseError: {} from value={}", err, str);
+                None
+            }
+        },
+        None => None,
+    })
 }
 
 pub async fn update_task(
@@ -100,7 +121,7 @@ pub async fn update_task(
             if completed_at != DateTime::<FixedOffset>::MIN_UTC {
                 active_task
                     .completed_at
-                    .set_if_not_equals(task_dto.completed_at);
+                    .set_if_not_equals(date_to_str(task_dto.completed_at));
             } else {
                 active_task.completed_at.set_if_not_equals(None);
             }
@@ -112,12 +133,9 @@ pub async fn update_task(
 
         let active_task = active_task.update(&db_conn).await?;
 
-        Ok(Json(build_task(active_task.try_into_model()?)))
+        Ok(Json(build_task(active_task.try_into_model()?)?))
     } else {
-        Err(AppError::not_found(format!(
-            "Not found task id={}",
-            id
-        )))
+        Err(AppError::not_found(format!("Not found task id={}", id)))
     }
 }
 
@@ -134,28 +152,25 @@ pub async fn delete_task(
         .await?
     {
         let mut active_task = task.into_active_model();
-        active_task.deleted_at = Set(Some(Utc::now().fixed_offset()));
+        active_task.deleted_at = Set(date_to_str(Some(Utc::now().fixed_offset())));
         let _ = active_task.save(&db_conn).await?;
 
         Ok(Json(true))
     } else {
-        Err(AppError::not_found(format!(
-            "Not found task id={}",
-            id
-        )))
+        Err(AppError::not_found(format!("Not found task id={}", id)))
     }
 }
 
-fn build_task(task: tasks::Model) -> TaskDto {
-    TaskDto {
+fn build_task(task: tasks::Model) -> AppResult<TaskDto> {
+    Ok(TaskDto {
         id: Some(task.id),
         priority: task.priority,
         title: Some(task.title),
         description: task.description,
         is_default: task.is_default,
-        completed_at: task.completed_at,
-        deleted_at: task.deleted_at,
-    }
+        completed_at: str_to_date(task.completed_at)?,
+        deleted_at: str_to_date(task.deleted_at)?,
+    })
 }
 
 #[derive(Serialize, Deserialize, Default, Validate, Debug)]
